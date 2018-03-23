@@ -61,13 +61,26 @@ namespace ICSharpCode.CodeConverter.CSharp
             foreach (var name in declarator.Names) {
                 var type = rawType;
                 if (!SyntaxTokenExtensions.IsKind(name.Nullable, VBasic.SyntaxKind.None)) {
-                    if (type is ArrayTypeSyntax)
-                        type = ((ArrayTypeSyntax)type).WithElementType(SyntaxFactory.NullableType(((ArrayTypeSyntax)type).ElementType));
-                    else
+                    if (type is ArrayTypeSyntax) {
+                        type = ((ArrayTypeSyntax)type).WithElementType(
+                            SyntaxFactory.NullableType(((ArrayTypeSyntax)type).ElementType));
+                        initializer = null;
+                    } else
                         type = SyntaxFactory.NullableType(type);
                 }
-                if (name.ArrayRankSpecifiers.Count > 0)
-                    type = SyntaxFactory.ArrayType(type, SyntaxFactory.List(name.ArrayRankSpecifiers.Select(a => (ArrayRankSpecifierSyntax)a.Accept(nodesVisitor))));
+
+                var rankSpecifiers = NodesVisitor.ConvertArrayRankSpecifierSyntaxes(name.ArrayRankSpecifiers, name.ArrayBounds, nodesVisitor, semanticModel, false);
+                if (rankSpecifiers.Count > 0) {
+                    var rankSpecifiersWithSizes = NodesVisitor.ConvertArrayRankSpecifierSyntaxes(name.ArrayRankSpecifiers, name.ArrayBounds, nodesVisitor, semanticModel);
+                    if (!rankSpecifiersWithSizes.SelectMany(ars => ars.Sizes).OfType<OmittedArraySizeExpressionSyntax>().Any())
+                    {
+                        initializer =
+                            SyntaxFactory.ArrayCreationExpression(
+                                SyntaxFactory.ArrayType(type, rankSpecifiersWithSizes));
+                    }
+                    type = SyntaxFactory.ArrayType(type, rankSpecifiers);
+                }
+
                 VariableDeclarationSyntax decl;
                 var v = SyntaxFactory.VariableDeclarator(ConvertIdentifier(name.Identifier, semanticModel), null, initializer == null ? null : SyntaxFactory.EqualsValueClause(initializer));
                 string k = type.ToString();
@@ -80,7 +93,7 @@ namespace ICSharpCode.CodeConverter.CSharp
             return newDecls;
         }
 
-        static ExpressionSyntax Literal(string valueText, object o) => GetLiteralExpression(valueText, o);
+        static ExpressionSyntax Literal(object o, string valueText = null) => GetLiteralExpression(valueText ?? o.ToString(), o);
 
         internal static ExpressionSyntax GetLiteralExpression(string valueText, object value)
         {
@@ -209,7 +222,6 @@ namespace ICSharpCode.CodeConverter.CSharp
             }
         }
 
-
         static bool IsConversionOperator(SyntaxToken token)
         {
             bool isConvOp= token.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.ExplicitKeyword, Microsoft.CodeAnalysis.CSharp.SyntaxKind.ImplicitKeyword)
@@ -312,6 +324,8 @@ namespace ICSharpCode.CodeConverter.CSharp
                     return SyntaxKind.ReadOnlyKeyword;
                 case VBasic.SyntaxKind.OverridesKeyword:
                     return SyntaxKind.OverrideKeyword;
+                //New isn't as restrictive as shadows, but it will behave the same for all existing programs
+                case VBasic.SyntaxKind.ShadowsKeyword:
                 case VBasic.SyntaxKind.OverloadsKeyword:
                     return SyntaxKind.NewKeyword;
                 case VBasic.SyntaxKind.OverridableKeyword:
@@ -360,16 +374,22 @@ namespace ICSharpCode.CodeConverter.CSharp
                 case VBasic.SyntaxKind.ExclusiveOrExpression:
                     return SyntaxKind.ExclusiveOrExpression;
                 case VBasic.SyntaxKind.EqualsExpression:
+                case VBasic.SyntaxKind.CaseEqualsClause:
                     return SyntaxKind.EqualsExpression;
                 case VBasic.SyntaxKind.NotEqualsExpression:
+                case VBasic.SyntaxKind.CaseNotEqualsClause:
                     return SyntaxKind.NotEqualsExpression;
                 case VBasic.SyntaxKind.GreaterThanExpression:
+                case VBasic.SyntaxKind.CaseGreaterThanClause:
                     return SyntaxKind.GreaterThanExpression;
                 case VBasic.SyntaxKind.GreaterThanOrEqualExpression:
+                case VBasic.SyntaxKind.CaseGreaterThanOrEqualClause:
                     return SyntaxKind.GreaterThanOrEqualExpression;
                 case VBasic.SyntaxKind.LessThanExpression:
+                case VBasic.SyntaxKind.CaseLessThanClause:
                     return SyntaxKind.LessThanExpression;
                 case VBasic.SyntaxKind.LessThanOrEqualExpression:
+                case VBasic.SyntaxKind.CaseLessThanOrEqualClause:
                     return SyntaxKind.LessThanOrEqualExpression;
                 case VBasic.SyntaxKind.IsExpression:
                     return SyntaxKind.EqualsExpression;
@@ -441,6 +461,13 @@ namespace ICSharpCode.CodeConverter.CSharp
                     return SyntaxKind.AscendingKeyword;
                 case VBasic.SyntaxKind.DescendingKeyword:
                     return SyntaxKind.DescendingKeyword;
+
+                // Not direct conversions
+
+                case VBasic.SyntaxKind.ExponentiateAssignmentStatement:
+                    return SyntaxKind.SimpleAssignmentExpression;
+                case VBasic.SyntaxKind.ExponentiateExpression:
+                    break;
             }
             throw new NotSupportedException(t + " not supported!");
         }

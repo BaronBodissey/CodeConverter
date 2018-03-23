@@ -181,6 +181,46 @@ class TestClass
         }
 
         [Fact]
+        public void TestShadowedMethod()
+        {
+            TestConversionVisualBasicToCSharp(
+                @"Class TestClass
+    Public Sub TestMethod()
+    End Sub
+
+    Public Sub TestMethod(i as Integer)
+    End Sub
+End Class
+
+Class TestSubclass
+    Inherits TestClass
+
+    Public Shadows Sub TestMethod()
+        ' Not possible: TestMethod(3)
+        System.Console.WriteLine(""New implementation"")
+    End Sub
+End Class", @"class TestClass
+{
+    public void TestMethod()
+    {
+    }
+
+    public void TestMethod(int i)
+    {
+    }
+}
+
+class TestSubclass : TestClass
+{
+    public new void TestMethod()
+    {
+        // Not possible: TestMethod(3)
+        System.Console.WriteLine(""New implementation"");
+    }
+}");
+        }
+
+        [Fact]
         public void TestExtensionMethod()
         {
             TestConversionVisualBasicToCSharp(
@@ -188,9 +228,17 @@ class TestClass
     <System.Runtime.CompilerServices.Extension()>
     Sub TestMethod(ByVal str As String)
     End Sub
+
+    <System.Runtime.CompilerServices.Extension()>
+    Sub TestMethod2Parameters(ByVal str As String, other As String)
+    End Sub
 End Module", @"static class TestClass
 {
     public static void TestMethod(this string str)
+    {
+    }
+
+    public static void TestMethod2Parameters(this string str, string other)
     {
     }
 }");
@@ -474,6 +522,30 @@ internal class TestClass2 : TestClass1
 
     public override void CreateVirtualInstance()
     {
+    }
+}");
+        }
+
+        [Fact]
+        public void TestNarrowingWideningConversionOperator()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class MyInt
+    Public Shared Narrowing Operator CType(i As Integer) As MyInt
+        Return New MyInt()
+    End Operator
+    Public Shared Widening Operator CType(myInt As MyInt) As Integer
+        Return 1
+    End Operator
+End Class"
+                , @"public class MyInt
+{
+    public static explicit operator MyInt(int i)
+    {
+        return new MyInt();
+    }
+    public static implicit operator int(MyInt myInt)
+    {
+        return 1;
     }
 }");
         }

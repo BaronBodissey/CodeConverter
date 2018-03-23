@@ -80,7 +80,7 @@ End Function";
 
             IEnumerable<ImportsStatementSyntax> TidyImportsList(IEnumerable<ImportsStatementSyntax> allImports)
             {
-                foreach (var import in allImports)
+                foreach (var import in allImports.GroupBy(c => c.ToString()).Select(g => g.First()))
                     foreach (var clause in import.ImportsClauses) {
                         if (ImportIsNecessary(clause))
                             yield return SyntaxFactory.ImportsStatement(SyntaxFactory.SingletonSeparatedList(clause));
@@ -107,10 +107,13 @@ End Function";
 
             public override VisualBasicSyntaxNode DefaultVisit(SyntaxNode node)
             {
+                var exceptionMessage = $"Cannot convert {node.GetType().Name} from {node.GetBriefNodeDescription()}";
+
                 if (CreateMethodBodyVisitor().Visit(node).Any()) {
-                    throw new NotImplementedOrRequiresSurroundingMethodDeclaration(node.GetType() + " not implemented!");
+                    throw new NotImplementedOrRequiresSurroundingMethodDeclaration(exceptionMessage);
                 }
-                throw new NotImplementedException(node.GetType() + " not implemented!");
+
+                throw new NotImplementedException(exceptionMessage);
             }
 
             public override VisualBasicSyntaxNode VisitCompilationUnit(CSS.CompilationUnitSyntax node)
@@ -1134,12 +1137,13 @@ End Function";
 
             public override VisualBasicSyntaxNode VisitAnonymousMethodExpression(CSS.AnonymousMethodExpressionSyntax node)
             {
-                return ConvertLambdaExpression(node, node.Block.Statements, node.ParameterList.Parameters, SyntaxFactory.TokenList(node.AsyncKeyword));
+                var parameterListParameters = node.ParameterList?.Parameters ?? Enumerable.Empty<CSS.ParameterSyntax>();// May have no parameter list
+                return ConvertLambdaExpression(node, node.Block.Statements, parameterListParameters, SyntaxFactory.TokenList(node.AsyncKeyword));
             }
 
             public override VisualBasicSyntaxNode VisitSimpleLambdaExpression(CSS.SimpleLambdaExpressionSyntax node)
             {
-                return ConvertLambdaExpression(node, node.Body, SyntaxFactory.SingletonSeparatedList(node.Parameter), SyntaxFactory.TokenList(node.AsyncKeyword));
+                return ConvertLambdaExpression(node, node.Body, new[] {node.Parameter}, SyntaxFactory.TokenList(node.AsyncKeyword));
             }
 
             public override VisualBasicSyntaxNode VisitParenthesizedLambdaExpression(CSS.ParenthesizedLambdaExpressionSyntax node)
@@ -1147,7 +1151,7 @@ End Function";
                 return ConvertLambdaExpression(node, node.Body, node.ParameterList.Parameters, SyntaxFactory.TokenList(node.AsyncKeyword));
             }
 
-            LambdaExpressionSyntax ConvertLambdaExpression(CSS.AnonymousFunctionExpressionSyntax node, object block, SeparatedSyntaxList<CSS.ParameterSyntax> parameters, SyntaxTokenList modifiers)
+            LambdaExpressionSyntax ConvertLambdaExpression(CSS.AnonymousFunctionExpressionSyntax node, object block, IEnumerable<CSS.ParameterSyntax> parameters, SyntaxTokenList modifiers)
             {
                 var symbol = ModelExtensions.GetSymbolInfo(semanticModel, node).Symbol as IMethodSymbol;
                 var parameterList = SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters.Select(p => (ParameterSyntax)p.Accept(TriviaConvertingVisitor))));
@@ -1464,11 +1468,14 @@ End Function";
 
             VisualBasicSyntaxNode WrapTypedNameIfNecessary(ExpressionSyntax name, CSS.ExpressionSyntax originalName)
             {
-                if (originalName.Parent is CSS.NameSyntax || originalName.Parent is CSS.AttributeSyntax || originalName.Parent is CSS.MemberAccessExpressionSyntax || originalName.Parent is CSS.MemberBindingExpressionSyntax) return name;
-                if (originalName != null && originalName.Parent is CSS.InvocationExpressionSyntax)
+                if (originalName.Parent is CSS.NameSyntax
+                    || originalName.Parent is CSS.AttributeSyntax
+                    || originalName.Parent is CSS.MemberAccessExpressionSyntax
+                    || originalName.Parent is CSS.MemberBindingExpressionSyntax
+                    || originalName.Parent is CSS.InvocationExpressionSyntax)
                     return name;
 
-                var symbolInfo = ModelExtensions.GetSymbolInfo(semanticModel, originalName);
+                var symbolInfo = semanticModel.GetSymbolInfo(originalName);
                 var symbol = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
                 if (symbol.IsKind(SymbolKind.Method))
                     return SyntaxFactory.AddressOfExpression(name);

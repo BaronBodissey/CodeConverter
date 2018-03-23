@@ -92,6 +92,46 @@ End Class");
         }
 
         [Fact]
+        public void TestNewMethodIsOverloadsNotShadows()
+        {
+            TestConversionCSharpToVisualBasic(
+                @"class TestClass
+{
+    public void TestMethod()
+    {
+    }
+
+    public void TestMethod(int i)
+    {
+    }
+}
+
+class TestSubclass : TestClass
+{
+    public new void TestMethod()
+    {
+        TestMethod(3);
+        System.Console.WriteLine(""Shadowed implementation"");
+    }
+}", @"Class TestClass
+    Public Sub TestMethod()
+    End Sub
+
+    Public Sub TestMethod(ByVal i As Integer)
+    End Sub
+End Class
+
+Class TestSubclass
+    Inherits TestClass
+
+    Public Overloads Sub TestMethod()
+        TestMethod(3)
+        System.Console.WriteLine(""Shadowed implementation"")
+    End Sub
+End Class");
+        }
+
+        [Fact]
         public void TestSealedMethod()
         {
             TestConversionCSharpToVisualBasic(
@@ -121,11 +161,19 @@ End Class");
     public static void TestMethod(this String str)
     {
     }
+
+    public static void TestMethod2Parameters(this String str, String other)
+    {
+    }
 }", @"Imports System.Runtime.CompilerServices
 
 Module TestClass
     <Extension()>
     Sub TestMethod(ByVal str As String)
+    End Sub
+
+    <Extension()>
+    Sub TestMethod2Parameters(ByVal str As String, ByVal other As String)
     End Sub
 End Module");
         }

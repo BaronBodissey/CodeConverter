@@ -50,7 +50,7 @@ namespace ICSharpCode.CodeConverter.VB
 
             public override SyntaxList<StatementSyntax> DefaultVisit(SyntaxNode node)
             {
-                throw new NotImplementedException(node.GetType() + " not implemented!");
+                throw new NotImplementedException($"Cannot convert {node.GetType().Name} from {node.GetBriefNodeDescription()}");
             }
 
             public override SyntaxList<StatementSyntax> VisitLocalDeclarationStatement(CSS.LocalDeclarationStatementSyntax node)
@@ -100,7 +100,7 @@ namespace ICSharpCode.CodeConverter.VB
                         elseBlock
                     );
                 } else {
-                    if (elseIfBlocks.Any() || !IsSimpleStatement(node.Statement)) {
+                    if (elseIfBlocks.Any() || elseBlock != null || !IsSimpleStatement(node.Statement)) {
                         stmt = SyntaxFactory.MultiLineIfBlock(
                              SyntaxFactory.IfStatement((ExpressionSyntax)node.Condition.Accept(nodesVisitor)).WithThenKeyword(SyntaxFactory.Token(SyntaxKind.ThenKeyword)),
                              ConvertBlock(node.Statement),
@@ -111,7 +111,7 @@ namespace ICSharpCode.CodeConverter.VB
                         stmt = SyntaxFactory.SingleLineIfStatement(
                             (ExpressionSyntax)node.Condition.Accept(nodesVisitor),
                             ConvertBlock(node.Statement),
-                            elseBlock == null ? null : SyntaxFactory.SingleLineElseClause(elseBlock.Statements)
+                            null
                         ).WithThenKeyword(SyntaxFactory.Token(SyntaxKind.ThenKeyword));
                     }
                 }
@@ -478,6 +478,24 @@ namespace ICSharpCode.CodeConverter.VB
                 return SyntaxFactory.SingletonList<StatementSyntax>(SyntaxFactory.GoToStatement(label));
             }
 
+            /// <summary>
+            /// VB doesn't have a block construct, but all of its other constructs (e.g. if statements) create a block.
+            /// So we can use an always-true if statement to isolate the variables.
+            /// </summary>
+            public override SyntaxList<StatementSyntax> VisitBlock(CSS.BlockSyntax node)
+            {
+                var statements = ConvertBlock(node);
+                var ifStatement = SyntaxFactory.IfStatement(SyntaxFactory.Token(
+                        SyntaxKind.IfKeyword),
+                    SyntaxFactory.TrueLiteralExpression(SyntaxFactory.Token(SyntaxKind.TrueKeyword)),
+                    SyntaxFactory.Token(SyntaxKind.ThenKeyword)
+                );
+
+                var ifBlock = SyntaxFactory.MultiLineIfBlock(ifStatement, statements, SyntaxFactory.List<ElseIfBlockSyntax>(), null);
+
+                return SyntaxFactory.SingletonList<StatementSyntax>(ifBlock);
+            }
+
             SyntaxList<StatementSyntax> ConvertBlock(CSS.StatementSyntax node)
             {
                 if (node is CSS.BlockSyntax) {
@@ -572,6 +590,10 @@ namespace ICSharpCode.CodeConverter.VB
                     }
                 }
                 return SyntaxFactory.SingletonList<StatementSyntax>(SyntaxFactory.ExitStatement(statementKind, SyntaxFactory.Token(keywordKind)));
+            }
+            public override SyntaxList<StatementSyntax> VisitEmptyStatement(CSS.EmptyStatementSyntax node)
+            {
+                return SyntaxFactory.List<StatementSyntax>();
             }
 
             public override SyntaxList<StatementSyntax> VisitCheckedStatement(CSS.CheckedStatementSyntax node)

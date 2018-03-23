@@ -15,6 +15,7 @@ namespace CodeConverter.Tests.VB
         while (true) ;
         for (;;) ;
         do ; while (true);
+        ;
     }
 }", @"Class TestClass
     Private Sub TestMethod()
@@ -229,50 +230,65 @@ End Class");
 End Class");
         }
 
-        [Fact(Skip = "Not implemented!")]
+        [Fact]
         public void MultidimensionalArrayInitializationStatement()
         {
             TestConversionCSharpToVisualBasic(@"class TestClass
 {
     void TestMethod()
     {
-        int[,] b = { { 1, 2 }, { 3, 4 } };
+        int[,] b = {
+            {1, 2},
+            {3, 4}
+        };
     }
 }", @"Class TestClass
     Private Sub TestMethod()
-        Dim b As Integer(,) = {{1, 2}, {3, 4}}
+        Dim b As Integer(,) = {
+        {1, 2},
+        {3, 4}}
     End Sub
 End Class");
         }
 
-        [Fact(Skip = "Not implemented!")]
+        [Fact]
         public void MultidimensionalArrayInitializationStatementWithType()
         {
             TestConversionCSharpToVisualBasic(@"class TestClass
 {
     void TestMethod()
     {
-        int[,] b = new int[,] { { 1, 2 }, { 3, 4 } };
+        int[,] b = new int[,] {
+            {1, 2},
+            {3, 4}
+        };
     }
 }", @"Class TestClass
     Private Sub TestMethod()
-        Dim b As Integer(,) = New Integer(,) {{1, 2}, {3, 4}}
+        Dim b As Integer(,) = New Integer(,) {
+        {1, 2},
+        {3, 4}}
     End Sub
 End Class");
         }
 
-        [Fact(Skip = "Not implemented!")]
+        [Fact]
         public void MultidimensionalArrayInitializationStatementWithLengths()
         {
             TestConversionCSharpToVisualBasic(@"class TestClass
 {
     void TestMethod()
     {
-        int[,] b = new int[2, 2] { { 1, 2 }, { 3, 4 } };
+        int[,] b = new int[2, 2] {
+            {1, 2},
+            {3, 4}
+        }
     }
 }", @"Class TestClass
     Private Sub TestMethod()
-        Dim b As Integer(,) = New Integer(1, 1) {{1, 2}, {3, 4}}
+        Dim b As Integer(,) = New Integer(1, 1) {
+        {1, 2},
+        {3, 4}}
     End Sub
 End Class");
         }
@@ -366,6 +382,32 @@ End Class");
         }
 
         [Fact]
+        public void IfStatementWithoutBlock()
+        {
+            TestConversionCSharpToVisualBasic(@"class TestClass
+{
+    void TestMethod (int a)
+    {
+        int b;
+        if (a == 0)
+            b = 0;
+        else
+            b = 3;
+    }
+}", @"Class TestClass
+    Private Sub TestMethod(ByVal a As Integer)
+        Dim b As Integer
+
+        If a = 0 Then
+            b = 0
+        Else
+            b = 3
+        End If
+    End Sub
+End Class");
+        }
+
+        [Fact]
         public void IfStatement()
         {
             TestConversionCSharpToVisualBasic(@"class TestClass
@@ -395,6 +437,38 @@ End Class");
             b = 2
         Else
             b = 3
+        End If
+    End Sub
+End Class");
+        }
+
+        [Fact]
+        public void BlockStatement()
+        {
+            TestConversionCSharpToVisualBasic(@"class TestClass
+{
+    public static void TestMethod()
+    {
+        {
+            var x = 1;
+            Console.WriteLine(x);
+        }
+
+        {
+            var x = 2;
+            Console.WriteLine(x);
+        }
+    }
+}", @"Class TestClass
+    Public Shared Sub TestMethod()
+        If True Then
+            Dim x = 1
+            Console.WriteLine(x)
+        End If
+
+        If True Then
+            Dim x = 2
+            Console.WriteLine(x)
         End If
     End Sub
 End Class");

@@ -1971,7 +1971,7 @@ namespace ICSharpCode.CodeConverter.Util
         /// </summary>
         /// <param name="specialType">The specialtype of this type.</param>
         /// <returns>The keyword kind for a given special type, or SyntaxKind.None if the type name is not a predefined type.</returns>
-        public static SyntaxKind GetPredefinedKeywordKind(SpecialType specialType)
+        public static SyntaxKind GetPredefinedKeywordKind(this SpecialType specialType)
         {
             switch (specialType) {
                 case SpecialType.System_Boolean:
@@ -2170,6 +2170,21 @@ namespace ICSharpCode.CodeConverter.Util
                 default:
                     return OperatorPrecedence.None;
             }
+        }
+
+        public static ArgumentListSyntax CreateArgList(params ExpressionSyntax[] copyArgs)
+        {
+            return SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(copyArgs.Select(SyntaxFactory.Argument)));
+        }
+
+        public static bool HasOperandOfUnconvertedType(this Microsoft.CodeAnalysis.VisualBasic.Syntax.BinaryExpressionSyntax node, string operandType, SemanticModel semanticModel)
+        {
+            return new[] {node.Left, node.Right}.Any(e => UnconvertedIsType(e, operandType, semanticModel));
+        }
+
+        public static bool UnconvertedIsType(Microsoft.CodeAnalysis.VisualBasic.Syntax.ExpressionSyntax e, string fullTypeName, SemanticModel semanticModel)
+        {
+            return semanticModel.GetTypeInfo(e).Type?.GetFullMetadataName() == fullTypeName;
         }
     }
 

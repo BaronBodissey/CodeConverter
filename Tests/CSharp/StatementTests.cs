@@ -195,6 +195,48 @@ class TestClass
         }
 
         [Fact]
+        public void ArrayEraseAndRedimStatement()
+        {
+            // One statement turns into two, so can't auto-test comments
+            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class TestClass
+    Shared Function TestMethod(numArray As Integer(), numArray2 As Integer()) As Integer()
+        ReDim numArray(3)
+        Erase numArray
+        numArray2(1) = 1
+        ReDim Preserve numArray(5), numArray2(5)
+        Dim y(6, 5) As Integer
+        y(2,3) = 1
+        ReDim Preserve y(6,8)
+        Return numArray2
+    End Function
+End Class", @"public class TestClass
+{
+    public static int[] TestMethod(int[] numArray, int[] numArray2)
+    {
+        numArray = new int[4];
+        numArray = null;
+        numArray2[1] = 1;
+        var oldNumArray = numArray;
+        numArray = new int[6];
+        if (oldNumArray != null)
+            Array.Copy(oldNumArray, numArray, Math.Min(6, oldNumArray.Length));
+        var oldNumArray2 = numArray2;
+        numArray2 = new int[6];
+        if (oldNumArray2 != null)
+            Array.Copy(oldNumArray2, numArray2, Math.Min(6, oldNumArray2.Length));
+        int[,] y = new int[7, 6];
+        y[2, 3] = 1;
+        var oldY = y;
+        y = new int[7, 9];
+        if (oldY != null)
+            for (var i = 0; i <= oldY.Length / oldY.GetLength(1) - 1; ++i)
+                Array.Copy(oldY, i * oldY.GetLength(1), y, i * y.GetLength(1), Math.Min(oldY.GetLength(1), y.GetLength(1)));
+        return numArray2;
+    }
+}");
+        }
+
+        [Fact]
         public void EndStatement()
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
@@ -243,7 +285,7 @@ class TestClass
     Private Sub TestMethod()
         With New System.Text.StringBuilder
             .Capacity = 20
-            .Length = 0
+            ?.Length = 0
         End With
     End Sub
 End Class", @"using System;
@@ -258,7 +300,39 @@ class TestClass
         {
             var withBlock = new System.Text.StringBuilder();
             withBlock.Capacity = 20;
-            withBlock.Length = 0;
+            withBlock?.Length = 0;
+        }
+    }
+}");
+        }
+
+        [Fact]
+        public void WithBlock2()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Class TestClass
+    Private Sub Save()
+        Using cmd As SqlCommand = new SqlCommand()
+            With cmd
+            .ExecuteNonQuery()
+            ?.ExecuteNonQuery()
+            .ExecuteNonQuery
+            ?.ExecuteNonQuery
+            End With
+        End Using
+    End Sub
+End Class", @"class TestClass
+{
+    private void Save()
+    {
+        using (SqlCommand cmd = new SqlCommand())
+        {
+            {
+                var withBlock = cmd;
+                withBlock.ExecuteNonQuery();
+                withBlock?.ExecuteNonQuery();
+                withBlock.ExecuteNonQuery();
+                withBlock?.ExecuteNonQuery();
+            }
         }
     }
 }");
@@ -407,7 +481,7 @@ class TestClass
 }");
         }
 
-        [Fact(Skip = "Not implemented!")]
+        [Fact]
         public void MultidimensionalArrayInitializationStatement()
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
@@ -423,7 +497,7 @@ class TestClass
 {
     private void TestMethod()
     {
-        int[,] b = { { 1, 2 }, { 3, 4 } };
+        int[,] b = new[] { { 1, 2 }, { 3, 4 } };
     }
 }");
         }
@@ -990,6 +1064,33 @@ class TestClass
         }
 
         [Fact]
+        public void CallStatement()
+        {
+            TestConversionVisualBasicToCSharp(@"Class TestClass
+    Private Sub TestMethod()
+        Call (Sub() Console.Write(""Hello""))
+        Call (Sub() Console.Write(""Hello""))()
+        Call TestMethod
+        Call TestMethod()
+    End Sub
+End Class", @"using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.VisualBasic;
+
+class TestClass
+{
+    private void TestMethod()
+    {
+        (() => Console.Write(""Hello""))();
+        (() => Console.Write(""Hello""))();
+        TestMethod();
+        TestMethod();
+    }
+}");
+        }
+
+        [Fact]
         public void AddRemoveHandler()
         {
             TestConversionVisualBasicToCSharp(@"Class TestClass
@@ -1077,6 +1178,49 @@ class TestClass
                 {
                     Console.Write(""default section"");
                     break;
+                }
+        }
+    }
+}");
+        }
+
+        [Fact]
+        public void SelectCaseWithExpression()
+        {
+            TestConversionVisualBasicToCSharpWithoutComments(@"Public Class TestClass
+    Shared Function TimeAgo(daysAgo As Integer) As String
+        Select Case daysAgo
+            Case 0 To 3, 4, Is >= 5, Is < 6, Is <= 7
+                Return ""this week""
+            Case Is > 0
+                Return daysAgo \ 7 & "" weeks ago""
+            Case Else
+                Return ""in the future""
+        End Select
+    End Function
+End Class", @"public class TestClass
+{
+    public static string TimeAgo(int daysAgo)
+    {
+        switch (daysAgo)
+        {
+            case object _ when 0 <= daysAgo && daysAgo <= 3:
+            case 4:
+            case object _ when daysAgo >= 5:
+            case object _ when daysAgo < 6:
+            case object _ when daysAgo <= 7:
+                {
+                    return ""this week"";
+                }
+
+            case object _ when daysAgo > 0:
+                {
+                    return daysAgo / 7 + "" weeks ago"";
+                }
+
+            default:
+                {
+                    return ""in the future"";
                 }
         }
     }
